@@ -26,13 +26,18 @@ async fn main() {
 
     loop {
         interval.tick().await;
+
         match fetch_price(api_url, trading_symbol).await {
             Ok(price) => {
                 println!("{} price: {}", trading_symbol, price);
+
                 update_price_history(&mut price_history, price.parse().unwrap(), max_history);
                 
                 if let Some(ma) = calculate_moving_average(&price_history) {
                     println!("Moving Average (last {} prices): {:.2}", price_history.len(), ma);
+
+                    let signal = trading_signal(price.parse().unwrap(), ma);
+                    println!("Trading Signal: {}", signal);
                 }
             }
             Err(e) => eprintln!("Failed to fetch price: {}", e),
@@ -43,7 +48,7 @@ async fn main() {
 async fn fetch_price(api_url: &str, symbol: &str) -> Result<String, Box<dyn std::error::Error>>{
     let url = format!("{}?symbol={}", api_url, symbol);
     let response = reqwest::get(&url).await?.json::<TickerPrice>().await?;
-    Ok(response.price)
+    Ok(response.price.parse::<f64>().unwrap().to_string())
 }
 
 fn update_price_history(history: &mut VecDeque<f64>, price: f64, max_history: usize) {
@@ -59,4 +64,14 @@ fn calculate_moving_average(history: &VecDeque<f64>) -> Option<f64> {
     }
     let sum: f64 = history.iter().sum();
     Some(sum / history.len() as f64)
+}
+
+fn trading_signal(current_price: f64, moving_average: f64) -> &'static str {
+    if current_price < moving_average {
+        "BUY"
+    } else if current_price > moving_average {
+        "SELL"
+    } else {
+        "HOLD"
+    }
 }
