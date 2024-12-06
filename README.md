@@ -4,7 +4,8 @@
 [*] - Setup Api Fetching
 [*] - Test 1
 [*] - Store and Analyze Data
-[] - Add a simple decision logic
+[*] - Add a simple decision logic
+[] - Logging trades
 
 
 
