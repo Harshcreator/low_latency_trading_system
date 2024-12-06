@@ -1,3 +1,4 @@
+use dashmap::mapref::entry;
 use reqwest;
 use serde::Deserialize;
 use tokio::time::{self, Duration};
@@ -17,7 +18,8 @@ struct Trade {
     timestamp: String,
 }
 
-
+const STOP_LOSS_PERCENT: f64 = 2.00;
+const TAKE_PROFIT_PERCENT: f64 = 3.0;
 
 #[tokio::main]
 async fn main() {
@@ -27,7 +29,9 @@ async fn main() {
     let mut price_history: VecDeque<f64> = VecDeque::new();
     let mut trade_log: Vec<Trade> = Vec::new();
     let max_history = 10;
+
     let mut is_in_position = false;
+    let mut entry_price: Option<f64> = None;
 
     let mut interval = time::interval(Duration::from_secs(2));
 
@@ -45,11 +49,16 @@ async fn main() {
                 if let Some(ma) = calculate_moving_average(&price_history) {
                     println!("Moving Average (last {} prices): {:.2}", price_history.len(), ma);
 
-                    let (signal, new_position_status) = trading_signal(price.parse().unwrap(), ma, is_in_position);
+                    let (signal, new_position_status) = trading_signal(price.parse().unwrap(), ma, is_in_position, entry_price);
 
-                    if signal == "BUY" || signal == "SELL" {
+                    if signal == "BUY" {
+                        entry_price = Some(price.parse().unwrap()); 
+                        log_trade(&mut trade_log, &signal, price.parse().unwrap());
+                    } else if signal == "SELL" {
+                        entry_price = None;
                         log_trade(&mut trade_log, &signal, price.parse().unwrap());
                     }
+
                     is_in_position = new_position_status;
                     println!("Trading Signal: {}", signal);
                 }
@@ -57,7 +66,7 @@ async fn main() {
             Err(e) => eprintln!("Failed to fetch price: {}", e),
         }
 
-        if trade_log.len() > 5 {
+        if trade_log.len() >= 10{
             break;
         }
     }
@@ -86,13 +95,28 @@ fn calculate_moving_average(history: &VecDeque<f64>) -> Option<f64> {
     Some(sum / history.len() as f64)
 }
 
-fn trading_signal(current_price: f64, moving_average: f64, is_in_position: bool) -> (String, bool) {
-    if !is_in_position && current_price < moving_average {
-        ("BUY".to_string(), true)
-    } else if is_in_position && current_price > moving_average {
-        ("SELL".to_string(), false)
+fn trading_signal(
+    current_price: f64, 
+    moving_average: f64, 
+    is_in_position: bool,
+    entry_price: Option<f64>,
+) -> (String, bool) {
+    if is_in_position {
+        if let Some(price) = entry_price {
+            let stop_loss_price = price * (1.0 - STOP_LOSS_PERCENT / 100.0);
+            let take_profit_price = price * (1.0 + TAKE_PROFIT_PERCENT / 100.0);
+
+            if current_price <= stop_loss_price {
+                return ("SELL".to_string(), false); 
+            } else if current_price >= take_profit_price {
+                return ("SELL".to_string(), false);
+            }
+        }
+        return ("HOLD".to_string(), is_in_position);
+    } else if current_price < moving_average {
+        return ("BUY".to_string(), true); 
     } else {
-        ("HOLD".to_string(), is_in_position)
+        return ("HOLD".to_string(), is_in_position);
     }
 }
 
