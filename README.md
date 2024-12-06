@@ -5,7 +5,9 @@
 [*] - Test 1
 [*] - Store and Analyze Data
 [*] - Add a simple decision logic
-[] - Logging trades
+[*] - Logging trades
+[*] - Enhancing the trade system
+[] - Adding performance metrics
 
 
 
